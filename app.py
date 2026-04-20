@@ -1,30 +1,27 @@
 import streamlit as st
 import cv2
-import mediapipe as mp
 import numpy as np
 import joblib
+from mediapipe.python.solutions import hands as mp_hands
+from mediapipe.python.solutions import drawing_utils as mp_draw
 
-st.title("Sign Language Recognition System")
+st.set_page_config(page_title="Sign Language Recognition", layout="centered")
 
+st.title("🤟 Sign Language Recognition System")
+
+# Load trained model
 model_data = joblib.load("gesture_model.pkl")
 model = model_data["model"]
 label_encoder = model_data["label_encoder"]
 
-mp_hands = mp.solutions.hands
-mp_draw = mp.solutions.drawing_utils
-
-run = st.checkbox("Start Camera")
-
-FRAME_WINDOW = st.image([])
-
-cap = cv2.VideoCapture(0)
-
+# Function to extract landmarks
 def extract_landmarks(hand_landmarks):
     coords = []
     for lm in hand_landmarks.landmark:
         coords.extend([lm.x, lm.y, lm.z])
     return coords
 
+# Normalize landmarks
 def normalize_landmarks(coords):
     coords = np.array(coords).reshape(21, 3)
     wrist = coords[0]
@@ -33,15 +30,20 @@ def normalize_landmarks(coords):
     coords /= scale
     return coords.flatten()
 
-with mp_hands.Hands(max_num_hands=1) as hands:
-    while run:
-        success, frame = cap.read()
-        if not success:
-            st.error("Camera not working")
-            break
+# Camera input from browser
+img_file = st.camera_input("📷 Show your hand gesture")
 
-        frame = cv2.flip(frame, 1)
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+if img_file is not None:
+    file_bytes = np.asarray(bytearray(img_file.read()), dtype=np.uint8)
+    frame = cv2.imdecode(file_bytes, 1)
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    with mp_hands.Hands(
+        static_image_mode=True,
+        max_num_hands=1,
+        min_detection_confidence=0.5
+    ) as hands:
 
         results = hands.process(rgb)
 
@@ -61,7 +63,7 @@ with mp_hands.Hands(max_num_hands=1) as hands:
 
                 cv2.putText(
                     frame,
-                    gesture,
+                    f"Gesture: {gesture}",
                     (20, 50),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     1,
@@ -69,4 +71,9 @@ with mp_hands.Hands(max_num_hands=1) as hands:
                     2
                 )
 
-        FRAME_WINDOW.image(frame, channels="BGR")
+                st.success(f"Predicted Gesture: {gesture}")
+
+        else:
+            st.warning("No hand detected")
+
+    st.image(frame, channels="BGR")
