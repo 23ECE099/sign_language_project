@@ -2,8 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 import joblib
-from mediapipe.python.solutions import hands as mp_hands
-from mediapipe.python.solutions import drawing_utils as mp_draw
+import mediapipe as mp
 
 st.set_page_config(page_title="Sign Language Recognition", layout="centered")
 
@@ -13,6 +12,10 @@ st.title("🤟 Sign Language Recognition System")
 model_data = joblib.load("gesture_model.pkl")
 model = model_data["model"]
 label_encoder = model_data["label_encoder"]
+
+# MediaPipe setup
+mp_hands = mp.solutions.hands
+mp_draw = mp.solutions.drawing_utils
 
 # Function to extract landmarks
 def extract_landmarks(hand_landmarks):
