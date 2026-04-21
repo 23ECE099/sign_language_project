@@ -1,30 +1,32 @@
 import streamlit as st
 import cv2
+import mediapipe as mp
 import numpy as np
 import joblib
-import mediapipe as mp
+import json
 
-st.set_page_config(page_title="Sign Language Recognition", layout="centered")
+st.title("Sign Language Recognition System")
+st.write("Show your hand gesture in front of camera")
 
-st.title("🤟 Sign Language Recognition System")
-
-# Load trained model
+# Load model
 model_data = joblib.load("gesture_model.pkl")
 model = model_data["model"]
 label_encoder = model_data["label_encoder"]
 
-# MediaPipe setup
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 
-# Function to extract landmarks
+run = st.checkbox("Start Camera")
+frame_window = st.image([])
+
+cap = cv2.VideoCapture(0)
+
 def extract_landmarks(hand_landmarks):
     coords = []
     for lm in hand_landmarks.landmark:
         coords.extend([lm.x, lm.y, lm.z])
     return coords
 
-# Normalize landmarks
 def normalize_landmarks(coords):
     coords = np.array(coords).reshape(21, 3)
     wrist = coords[0]
@@ -33,36 +35,35 @@ def normalize_landmarks(coords):
     coords /= scale
     return coords.flatten()
 
-# Camera input from browser
-img_file = st.camera_input("📷 Show your hand gesture")
+with mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=1
+) as hands:
 
-if img_file is not None:
-    file_bytes = np.asarray(bytearray(img_file.read()), dtype=np.uint8)
-    frame = cv2.imdecode(file_bytes, 1)
+    while run:
+        ret, frame = cap.read()
+        if not ret:
+            st.write("Camera error")
+            break
 
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.flip(frame, 1)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    with mp_hands.Hands(
-        static_image_mode=True,
-        max_num_hands=1,
-        min_detection_confidence=0.5
-    ) as hands:
+        result = hands.process(rgb)
 
-        results = hands.process(rgb)
-
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
+        if result.multi_hand_landmarks:
+            for hand in result.multi_hand_landmarks:
                 mp_draw.draw_landmarks(
                     frame,
-                    hand_landmarks,
+                    hand,
                     mp_hands.HAND_CONNECTIONS
                 )
 
-                raw = extract_landmarks(hand_landmarks)
+                raw = extract_landmarks(hand)
                 norm = normalize_landmarks(raw)
 
-                prediction = model.predict([norm])[0]
-                gesture = label_encoder.inverse_transform([prediction])[0]
+                pred = model.predict([norm])[0]
+                gesture = label_encoder.inverse_transform([pred])[0]
 
                 cv2.putText(
                     frame,
@@ -74,9 +75,4 @@ if img_file is not None:
                     2
                 )
 
-                st.success(f"Predicted Gesture: {gesture}")
-
-        else:
-            st.warning("No hand detected")
-
-    st.image(frame, channels="BGR")
+        frame_window.image(frame, channels="BGR")
