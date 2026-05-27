@@ -451,6 +451,8 @@ streamlit run app.py
 
 # 👨‍💻 Author
 
+Naveensurya V
+
 Developed using:
 
 * Python
